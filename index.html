@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>word2vec · CBOW — an interactive walkthrough</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --panel2: #f1f2f8;
+    --inset: #f8f9fc;
+    --border: #e2e5ef;
+    --text: #1a1d2e;
+    --muted: #5b6178;
+    --dim: #8a90a8;
+    --ink-rgb: 26, 29, 46;
+    --violet-rgb: 124, 58, 237;
+    --cyan-rgb: 8, 145, 178;
+    --amber-rgb: 217, 119, 6;
+    --green-rgb: 5, 150, 105;
+    --rose-rgb: 225, 29, 72;
+    --violet: rgb(var(--violet-rgb));
+    --cyan: rgb(var(--cyan-rgb));
+    --amber: rgb(var(--amber-rgb));
+    --green: rgb(var(--green-rgb));
+    --rose: rgb(var(--rose-rgb));
+    --blue: #2563eb;
+    --shadow: 0 1px 2px rgba(26, 29, 46, 0.04), 0 6px 24px rgba(26, 29, 46, 0.05);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+  body {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15.5px;
+    line-height: 1.6;
+    background:
+      radial-gradient(1100px 600px at 5% -5%, rgba(var(--violet-rgb), 0.10), transparent 60%),
+      radial-gradient(900px 600px at 105% 15%, rgba(var(--cyan-rgb), 0.08), transparent 60%),
+      radial-gradient(900px 700px at 50% 120%, rgba(var(--green-rgb), 0.06), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  a { color: inherit; }
+  code, .mono { font-family: var(--mono); }
+  code.inline { background: var(--panel2); padding: 1px 6px; border-radius: 6px; font-size: 0.88em; color: #5b21b6; }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 22px;
+    padding: 12px 28px;
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .brand { font-weight: 700; letter-spacing: 0.2px; display: flex; align-items: center; gap: 10px; }
+  nav .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--violet), var(--cyan)); box-shadow: 0 0 14px var(--violet); }
+  nav .links { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  nav .links a { text-decoration: none; color: var(--muted); font-size: 13.5px; padding: 6px 11px; border-radius: 8px; transition: all .2s; }
+  nav .links a:hover, nav .links a.active { color: var(--text); background: var(--panel2); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 0 28px 120px; }
+  section { padding: 90px 0 10px; }
+
+  /* ---------- reveal ---------- */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s ease, transform .8s ease; }
+  .reveal.visible { opacity: 1; transform: none; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 90px 0 30px; text-align: center; }
+  .hero .eyebrow { display: inline-block; font-family: var(--mono); font-size: 12.5px; color: var(--violet); border: 1px solid rgba(var(--violet-rgb),.35); background: rgba(var(--violet-rgb),.08); padding: 5px 12px; border-radius: 999px; }
+  .hero h1 {
+    font-size: clamp(38px, 6vw, 68px); line-height: 1.05; margin: 22px 0 14px; letter-spacing: -1.5px;
+    background: linear-gradient(120deg, var(--text) 10%, var(--violet) 50%, var(--cyan) 92%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p.sub { color: var(--muted); max-width: 720px; margin: 0 auto; font-size: 17.5px; }
+  .stats { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 34px 0 10px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px 18px; min-width: 130px; box-shadow: var(--shadow); }
+  .stat b { display: block; font-size: 22px; font-family: var(--mono); }
+  .stat span { color: var(--muted); font-size: 12.5px; }
+
+  .pipeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; margin: 50px 0 0; position: relative; }
+  .pipe-node { position: relative; text-align: center; cursor: pointer; padding: 0 6px; }
+  .pipe-node .bubble {
+    width: 64px; height: 64px; margin: 0 auto 10px; border-radius: 18px;
+    display: grid; place-items: center; font-family: var(--mono); font-size: 20px;
+    background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--violet);
+    transition: transform .25s, box-shadow .25s, border-color .25s;
+  }
+  .pipe-node:hover .bubble { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(var(--violet-rgb),.25); border-color: var(--violet); }
+  .pipe-node .lbl { font-weight: 600; font-size: 14px; }
+  .pipe-node .sl { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .pipe-node:not(:last-child)::after {
+    content: ""; position: absolute; top: 32px; left: calc(50% + 38px); right: calc(-50% + 38px); height: 2px;
+    background: repeating-linear-gradient(90deg, var(--violet) 0 8px, transparent 8px 14px);
+    background-size: 28px 2px; animation: flow 1.2s linear infinite; opacity: .6;
+  }
+  @keyframes flow { to { background-position: 28px 0; } }
+
+  /* ---------- section headers ---------- */
+  .sh { display: flex; align-items: baseline; gap: 16px; margin-bottom: 8px; }
+  .sh .num { font-family: var(--mono); color: var(--violet); font-size: 14px; border: 1px solid rgba(var(--violet-rgb),.4); border-radius: 8px; padding: 2px 8px; }
+  .sh h2 { font-size: 32px; margin: 0; letter-spacing: -0.6px; }
+  .lede { color: var(--muted); max-width: 820px; margin: 6px 0 28px; font-size: 16.5px; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 22px; position: relative; box-shadow: var(--shadow); }
+  .card h3 { margin: 0 0 12px; font-size: 15px; letter-spacing: .3px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+  .grid2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; align-items: start; }
+  .grid2.even { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 960px) {
+    .grid2, .grid2.even { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: repeat(3, 1fr); row-gap: 26px; }
+    .pipe-node:nth-child(3)::after { display: none; }
+    nav .links { display: none; }
+  }
+
+  /* ---------- form controls ---------- */
+  button, .btn {
+    font: inherit; font-size: 13.5px; color: var(--text); cursor: pointer;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 7px 14px;
+    transition: all .18s;
+  }
+  button:hover { border-color: var(--violet); background: rgba(var(--violet-rgb),.14); }
+  button.primary { background: linear-gradient(135deg, rgba(var(--violet-rgb),.35), rgba(var(--cyan-rgb),.25)); border-color: rgba(var(--violet-rgb),.6); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  input[type=text], textarea {
+    font: inherit; font-family: var(--mono); font-size: 14px; color: var(--text);
+    background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px 11px; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  input[type=text]:focus, textarea:focus { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(var(--violet-rgb),.18); }
+  input.bad { border-color: var(--rose) !important; box-shadow: 0 0 0 3px rgba(var(--rose-rgb),.15); }
+  textarea { width: 100%; min-height: 150px; resize: vertical; line-height: 1.55; }
+  input[type=range] { accent-color: var(--violet); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .tag { font-family: var(--mono); font-size: 11.5px; color: var(--cyan); background: rgba(var(--cyan-rgb),.09); border: 1px solid rgba(var(--cyan-rgb),.25); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+
+  /* ---------- tokens ---------- */
+  .toks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tok {
+    display: inline-flex; flex-direction: column; align-items: center; line-height: 1.25;
+    padding: 4px 8px 3px; border-radius: 8px; background: var(--panel2); border: 1px solid transparent;
+    font-family: var(--mono); font-size: 13px; cursor: default; transition: all .25s;
+  }
+  .tok .id { font-size: 10px; color: var(--dim); }
+  .tok.oov { color: var(--rose); background: rgba(var(--rose-rgb),.07); text-decoration: line-through; opacity: .7; }
+  .tok.rej { color: var(--dim); background: transparent; border: 1px dashed rgba(var(--ink-rgb),.14); }
+  .tok.click { cursor: pointer; }
+  .tok.click:hover { border-color: var(--dim); }
+  .tok.ctx { background: rgba(var(--amber-rgb),.15); border-color: rgba(var(--amber-rgb),.65); color: var(--amber); }
+  .tok.ctx .id { color: rgba(var(--amber-rgb),.8); }
+  .tok.tgt { background: rgba(var(--green-rgb),.17); border-color: var(--green); color: var(--green); transform: translateY(-3px); box-shadow: 0 6px 18px rgba(var(--green-rgb),.25); }
+  .tok.tgt .id { color: rgba(var(--green-rgb),.85); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 12px 0 0; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .kv div { background: var(--inset); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+  .kv.kv4 { grid-template-columns: repeat(4, 1fr); }
+  .kv b { font-family: var(--mono); font-size: 20px; display: block; }
+  .kv span { font-size: 12px; color: var(--muted); }
+
+  /* ---------- code ---------- */
+  .code {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.65;
+    background: #fbfbfe; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+    padding: 12px 0; overflow-x: auto; margin: 0;
+  }
+  .code .file { font-size: 11.5px; color: var(--dim); padding: 0 16px 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .code .ln { display: block; padding: 0 16px; white-space: pre; border-left: 2px solid transparent; transition: background .25s, border-color .25s; }
+  .code .ln.hl { background: rgba(var(--violet-rgb),.13); border-left-color: var(--violet); }
+  .code .kw { color: #7c3aed; }
+  .code .str { color: #15803d; }
+  .code .com { color: #94a3b8; font-style: italic; }
+  .code .num { color: #c2410c; }
+  .code .fn { color: #0369a1; }
+
+  /* ---------- windows ---------- */
+  .tensor { font-family: var(--mono); font-size: 14px; background: var(--inset); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; line-height: 1.9; }
+  .tensor .c { color: var(--amber); }
+  .tensor .t { color: var(--green); }
+  .tensor .w { color: var(--dim); font-size: 12px; }
+  table.mat { border-collapse: separate; border-spacing: 3px; font-family: var(--mono); font-size: 12.5px; margin: 6px 0; }
+  table.mat th { color: var(--dim); font-weight: 500; font-size: 11px; padding: 2px 6px; }
+  table.mat td { padding: 3px 9px; border-radius: 6px; background: rgba(var(--ink-rgb),.03); color: var(--muted); text-align: center; min-width: 52px; transition: all .25s; }
+  table.mat td.rowi { background: none; color: var(--dim); min-width: 20px; }
+  table.mat tr.cur td:not(.rowi) { color: var(--text); background: rgba(var(--amber-rgb),.13); }
+  table.mat tr.cur td.tcol { background: rgba(var(--green-rgb),.2); color: var(--green); }
+  table.mat td.tcol { color: rgba(var(--green-rgb),.7); }
+
+  /* ---------- network ---------- */
+  .net { display: grid; grid-template-columns: 1.35fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 1060px) { .net { grid-template-columns: 1fr; } }
+  .net .codewrap { position: sticky; top: 80px; }
+  .stage {
+    display: grid; grid-template-columns: 150px 1fr; gap: 18px; align-items: center;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; box-shadow: var(--shadow);
+    transition: border-color .3s, box-shadow .3s, background .3s;
+  }
+  .stage:hover { border-color: rgba(var(--violet-rgb),.5); }
+  .stage .title { font-weight: 650; font-size: 15px; }
+  .stage .desc { color: var(--muted); font-size: 12.5px; margin-top: 3px; line-height: 1.45; }
+  .stage .tag { display: inline-block; margin-top: 8px; }
+  .stage.bp { border-color: var(--rose); box-shadow: 0 0 0 1px var(--rose), 0 0 32px rgba(var(--rose-rgb),.25); background: rgba(var(--rose-rgb),.05); }
+  .connector { height: 26px; width: 2px; margin: 0 auto; background: linear-gradient(var(--violet), var(--violet)); position: relative; overflow: hidden; opacity: .65; }
+  .connector::after { content: ""; position: absolute; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: drop 1.4s linear infinite; }
+  .connector.back { background: var(--rose); }
+  .connector.back::after { background: var(--rose); box-shadow: 0 0 10px var(--rose); animation: rise .5s linear infinite; }
+  @keyframes drop { from { top: -8px; } to { top: 26px; } }
+  @keyframes rise { from { top: 26px; } to { top: -8px; } }
+
+  .slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .slot { display: flex; flex-direction: column; gap: 4px; align-items: stretch; text-align: center; }
+  .slot label { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .slot input { width: 100%; text-align: center; padding: 7px 4px; }
+  .slot.c input { border-color: rgba(var(--amber-rgb),.45); color: var(--amber); }
+  .slot.t input { border-color: rgba(var(--green-rgb),.5); color: var(--green); border-style: dashed; }
+  .slot .sid { font-family: var(--mono); font-size: 10.5px; color: var(--dim); height: 14px; }
+
+  .embedwrap { display: grid; grid-template-columns: 74px 1fr; gap: 14px; align-items: center; }
+  .ethumb { position: relative; }
+  .ethumb canvas { width: 74px; height: 170px; border-radius: 6px; border: 1px solid var(--border); display: block; image-rendering: pixelated; }
+  .ethumb .mk { position: absolute; left: -4px; right: -4px; height: 3px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 8px var(--amber); transition: top .4s; }
+  .ethumb .mk.flash { background: var(--rose); box-shadow: 0 0 12px var(--rose); }
+  .ethumb .cap { font-size: 10px; color: var(--dim); text-align: center; margin-top: 4px; line-height: 1.2; }
+  .hrows { display: flex; flex-direction: column; gap: 6px; }
+  .hrow { display: grid; grid-template-columns: 78px 1fr; gap: 10px; align-items: center; font-family: var(--mono); font-size: 12px; }
+  .hrow .w { color: var(--amber); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hrow.h .w { color: var(--violet); }
+  .hrow canvas { width: 100%; height: 16px; border-radius: 4px; display: block; }
+  .formula { font-family: var(--mono); font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+
+  .bars { display: flex; flex-direction: column; gap: 5px; }
+  .bar { display: grid; grid-template-columns: 96px 1fr 58px; gap: 10px; align-items: center; font-family: var(--mono); font-size: 12.5px; }
+  .bar .w { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .track { height: 14px; background: rgba(var(--ink-rgb),.04); border-radius: 4px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--violet), var(--cyan)); transition: width .45s cubic-bezier(.2,.8,.2,1); }
+  .bar.tgt .w { color: var(--green); font-weight: 700; }
+  .bar.tgt .fill { background: linear-gradient(90deg, #34d399, var(--green)); }
+  .bar .p { color: var(--muted); text-align: right; }
+  .lossline { margin-top: 12px; font-family: var(--mono); font-size: 13px; display: flex; gap: 18px; flex-wrap: wrap; }
+  .lossline b { color: var(--text); }
+
+  .trainbox { margin-top: 18px; border: 1px dashed rgba(var(--rose-rgb),.4); background: rgba(var(--rose-rgb),.035); }
+  .trainbox h3 { color: var(--rose); }
+  .bignum { font-family: var(--mono); font-size: 26px; font-weight: 700; }
+  .delta-up { color: var(--green); }
+  .delta-down { color: var(--rose); }
+
+  /* ---------- training ---------- */
+  .chart { width: 100%; height: auto; display: block; }
+  .phases { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .phase { font-family: var(--mono); font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); transition: all .3s; }
+  .phase.on { color: #fff; background: linear-gradient(135deg, var(--violet), var(--cyan)); border-color: transparent; font-weight: 700; box-shadow: 0 6px 20px rgba(var(--violet-rgb),.35); }
+  .phasedesc { min-height: 48px; font-size: 14px; }
+  .progress { height: 6px; border-radius: 3px; background: rgba(var(--ink-rgb),.06); overflow: hidden; margin: 10px 0 4px; }
+  .progress div { height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--cyan)); transition: width .4s; }
+
+  /* ---------- space ---------- */
+  .space { display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  @media (max-width: 1000px) { .space { grid-template-columns: 1fr; } }
+  .mapwrap { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--border); background: radial-gradient(circle at 50% 50%, #ffffff, #f3f4fa); box-shadow: var(--shadow); }
+  #map { display: block; width: 100%; height: 640px; cursor: grab; }
+  #map.drag { cursor: grabbing; }
+  .maptools { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .maptools input { background: rgba(255,255,255,.92); width: 220px; }
+  .maptools button { background: rgba(255,255,255,.92); }
+  .maphint { position: absolute; bottom: 10px; left: 14px; font-size: 12px; color: var(--dim); pointer-events: none; }
+  .tooltip { position: absolute; pointer-events: none; background: rgba(255,255,255,.96); box-shadow: var(--shadow); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; font-size: 12.5px; font-family: var(--mono); opacity: 0; transition: opacity .12s; white-space: nowrap; z-index: 5; }
+  .side { display: flex; flex-direction: column; gap: 14px; }
+  .nb { display: grid; grid-template-columns: 1fr 70px 44px; gap: 8px; align-items: center; font-family: var(--mono); font-size: 12.5px; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+  .nb:hover { background: var(--panel2); }
+  .nb .track { height: 6px; background: rgba(var(--ink-rgb),.06); border-radius: 3px; overflow: hidden; }
+  .nb .fill { height: 100%; background: linear-gradient(90deg, var(--violet), var(--cyan)); }
+  .nb .s { color: var(--muted); text-align: right; font-size: 11.5px; }
+  .clusters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cl { font-size: 11.5px; font-family: var(--mono); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all .2s; }
+  .cl i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .cl.on { background: var(--panel2); border-color: var(--text); }
+  .selword { font-size: 26px; font-weight: 700; font-family: var(--mono); }
+
+  /* ---------- guess game ---------- */
+  .game { text-align: center; padding: 34px 22px; }
+  .sentence { font-family: var(--mono); font-size: clamp(20px, 3vw, 30px); display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin: 10px 0 24px; }
+  .sentence .cw { color: var(--amber); }
+  .sentence .blank { min-width: 140px; border-bottom: 3px dashed var(--green); color: var(--green); padding: 0 10px; transition: all .3s; }
+  .sentence .blank.shown { border-bottom-style: solid; text-shadow: 0 0 20px rgba(var(--green-rgb),.6); }
+  .quote { font-size: 20px; font-style: italic; color: #33384f; border-left: 3px solid var(--violet); padding: 4px 0 4px 18px; margin: 0 0 6px; }
+
+  /* ---------- arithmetic ---------- */
+  .arith { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: 20px; }
+  .arith input { width: 130px; text-align: center; }
+  .gauge { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--blue), rgba(var(--ink-rgb),.08) 50%, var(--rose)); position: relative; margin: 18px 0 6px; }
+  .gauge .needle { position: absolute; top: -6px; width: 4px; height: 22px; border-radius: 2px; background: var(--text); box-shadow: 0 2px 8px rgba(var(--ink-rgb), .35); transition: left .5s cubic-bezier(.2,.8,.2,1); }
+
+  /* ---------- code map ---------- */
+  .cmap { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .cmap a { text-decoration: none; display: block; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--panel); box-shadow: var(--shadow); transition: all .2s; }
+  .cmap a:hover { border-color: var(--violet); transform: translateY(-2px); }
+  .cmap code { color: var(--cyan); font-size: 13px; }
+  .cmap p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  footer { text-align: center; color: var(--dim); font-size: 13px; margin-top: 70px; }
+  .missing { max-width: 640px; margin: 120px auto; text-align: center; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand"><span class="dot"></span>word2vec <span class="muted" style="font-weight:400">· CBOW</span></div>
+  <div class="links">
+    <a href="#idea">Idea</a><a href="#tokens">Tokens</a><a href="#windows">Windows</a><a href="#network">Network</a>
+    <a href="#training">Training</a><a href="#space">Space</a><a href="#arith">Arithmetic</a><a href="#code">Code map</a>
+  </div>
+</nav>
+
+<main id="app">
+  <!-- ======================================================= HERO -->
+  <header class="hero">
+    <span class="eyebrow">word2vec.py · continuous bag of words</span>
+    <h1>How a tiny network<br/>learns what words mean</h1>
+    <p class="sub">An interactive walk through our implementation — trained on IMDB reviews, with the
+      <b>real trained weights</b> running live in your browser. Every number on this page comes from the model.</p>
+    <div class="stats" id="stats"></div>
+    <div class="pipeline">
+      <div class="pipe-node" data-go="tokens"><div class="bubble">Aa</div><div class="lbl">Raw text</div><div class="sl">load_corpus()</div></div>
+      <div class="pipe-node" data-go="tokens"><div class="bubble">[ ]</div><div class="lbl">Tokens → ids</div><div class="sl">tokenize · Vocab</div></div>
+      <div class="pipe-node" data-go="windows"><div class="bubble">⟦·⟧</div><div class="lbl">Windows</div><div class="sl">build_cbow_windows</div></div>
+      <div class="pipe-node" data-go="network"><div class="bubble">∑</div><div class="lbl">CBOW net</div><div class="sl">CBOW.forward</div></div>
+      <div class="pipe-node" data-go="training"><div class="bubble">∇</div><div class="lbl">Loss + Adam</div><div class="sl">train()</div></div>
+      <div class="pipe-node" data-go="space"><div class="bubble">✦</div><div class="lbl">Embeddings</div><div class="sl">get_embeddings</div></div>
+    </div>
+  </header>
+
+  <!-- ======================================================= 1. IDEA -->
+  <section id="idea" class="reveal">
+    <div class="sh"><span class="num">01</span><h2>The idea: meaning from company</h2></div>
+    <div class="grid2">
+      <div>
+        <p class="quote">“You shall know a word by the company it keeps.”</p>
+        <p class="muted small" style="margin:0 0 18px 21px">— J.R. Firth, 1957</p>
+        <p>CBOW turns that sentence into a training task. Hide one word, show the network the
+          <span style="color:var(--amber)">2 words on each side</span>, and ask it to guess the
+          <span style="color:var(--green)">missing middle word</span>. Do this a million times.</p>
+        <p>The network can only get good at this game if words that show up in similar contexts end up with
+          <b>similar vectors</b>. So <i>good</i>, <i>great</i> and <i>excellent</i> drift together, as do <i>movie</i>, <i>film</i> and <i>flick</i>.
+          The guessing task is just an excuse; the vectors are the real product.</p>
+        <p class="muted small">Try it yourself → these are real windows from the corpus that our trained model gets right.</p>
+      </div>
+      <div class="card game">
+        <h3>Guess the middle word</h3>
+        <div class="sentence" id="gSentence"></div>
+        <div class="row" style="justify-content:center">
+          <input type="text" id="gInput" placeholder="your guess…" style="width:180px;text-align:center" />
+          <button class="primary" id="gReveal">Reveal</button>
+          <button id="gNext">Next →</button>
+        </div>
+        <div id="gResult" style="margin-top:22px;text-align:left"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= 2. TOKENS -->
+  <section id="tokens" class="reveal">
+    <div class="sh"><span class="num">02</span><h2>Text → tokens → ids</h2></div>
+    <p class="lede">Each review is lowercased, HTML line breaks are stripped, the text is split on whitespace, and only purely
+      alphabetic pieces survive (so <code class="inline">movie.</code> or <code class="inline">don't</code> are dropped entirely).
+      Words seen fewer than <b id="minCount"></b> times are dropped too. Every surviving word gets an integer id, which is just
+      its <b>frequency rank</b>: id 0 is the most common word. <b>Edit the text</b> and watch the tokens update.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>A review from the training set</h3>
+        <textarea id="rawText" spellcheck="false"></textarea>
+        <div class="toks" id="tokChips" style="margin-top:16px"></div>
+        <div class="legend"><span><i style="background:var(--panel2)"></i>kept (id below)</span><span><i style="background:rgba(var(--rose-rgb),.5)"></i>out of vocab (rare)</span><span><i style="border:1px dashed var(--dim)"></i>not alphabetic → never a token</span></div>
+        <div class="kv kv4">
+          <div><b id="kPieces">0</b><span>whitespace pieces</span></div>
+          <div><b id="kRej">0</b><span>rejected by isalpha()</span></div>
+          <div><b id="kDropped">0</b><span>out of vocab</span></div>
+          <div><b id="kKept">0</b><span>kept → ids</span></div>
+        </div>
+      </div>
+      <div>
+        <pre class="code" id="codeTok"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= 3. WINDOWS -->
+  <section id="windows" class="reveal">
+    <div class="sh"><span class="num">03</span><h2>Sliding windows → training pairs</h2></div>
+    <p class="lede">A window of <b id="winSizeTxt"></b> slides over the ids, one step at a time. The middle word becomes
+      the <span style="color:var(--green)">target</span>, and the <b id="ctxTxt"></b> around it become the
+      <span style="color:var(--amber)">context</span>. Across all reviews this gives <b id="nWindowsTxt"></b> training examples.
+      Click any token to centre the window on it.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Window over the review above</h3>
+        <div class="toks" id="winChips"></div>
+        <div class="row" style="margin-top:18px">
+          <button id="winPrev">◀</button>
+          <button id="winPlay" class="primary" style="min-width:86px">▶ Play</button>
+          <button id="winNext">▶</button>
+          <span class="muted small" style="margin-left:6px">speed</span><input type="range" id="winSpeed" min="1" max="10" value="4" style="width:90px" />
+          <span class="mono small muted" id="winCount" style="margin-left:auto"></span>
+        </div>
+        <div style="margin-top:18px" class="tensor" id="winPair"></div>
+        <div class="row" style="margin-top:14px">
+          <button id="winSend">Send this window to the network ↓</button>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <h3>The <code class="inline">windows</code> array (numpy view)</h3>
+          <table class="mat" id="winMat"></table>
+          <p class="muted small" style="margin:8px 0 0"><code class="inline">windows[:, 2]</code> takes the green column as <b>targets</b>;
+            <code class="inline">np.delete(windows, 2, axis=1)</code> keeps the other four as <b>contexts</b>.</p>
+        </div>
+        <pre class="code" id="codeWin"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= 4. NETWORK -->
+  <section id="network" class="reveal">
+    <div class="sh"><span class="num">04</span><h2>Inside the network</h2></div>
+    <p class="lede">The whole model is just two weight matrices: an <b>embedding table</b> <code class="inline">E</code> with one 100-dimensional vector per word,
+      and an <b>output layer</b> <code class="inline">W</code> that scores every word in the vocabulary. Type any context words below (they must be in the vocabulary) and the real
+      trained network runs live. Hover a stage to see its line of code.</p>
+    <div class="net">
+      <div>
+        <div class="stage" data-stage="ids">
+          <div><div class="title">1 · Context ids</div><div class="desc">4 context words, plus the true middle word (optional, used for the loss)</div><span class="tag">[1, 4]</span></div>
+          <div class="slots" id="slots"></div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage" data-stage="embed">
+          <div><div class="title">2 · Embedding lookup</div><div class="desc">Each id selects one row of <b>E</b>. No arithmetic, just indexing.</div><span class="tag">[1, 4, 100]</span></div>
+          <div class="embedwrap">
+            <div class="ethumb"><canvas id="eThumb" width="100" height="240"></canvas><div class="cap">E · <span id="vCap"></span>×100<br/>rows by freq (log)</div></div>
+            <div class="hrows" id="ctxRows"></div>
+          </div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage" data-stage="mean">
+          <div><div class="title">3 · Average</div><div class="desc">Word order inside the window is thrown away — that's the “bag” in bag-of-words.</div><span class="tag">[1, 100]</span></div>
+          <div>
+            <div class="hrows"><div class="hrow h"><div class="w">h</div><canvas id="hRow"></canvas></div></div>
+            <div class="formula">h = (e<sub>1</sub> + e<sub>2</sub> + e<sub>3</sub> + e<sub>4</sub>) / 4 &nbsp;·&nbsp; ‖h‖ = <span id="hNorm"></span></div>
+          </div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage" data-stage="linear">
+          <div><div class="title">4 · Linear layer</div><div class="desc">One score (logit) per vocab word: a dot product of <b>h</b> with that word's row of <b>W</b>, plus a bias.</div><span class="tag">[1, <span class="vtxt"></span>]</span></div>
+          <div>
+            <canvas id="logitHist" style="width:100%;height:110px;display:block"></canvas>
+            <div class="formula">logit<sub>w</sub> = W<sub>w</sub> · h + b<sub>w</sub> &nbsp;·&nbsp; histogram of all <span class="vtxt"></span> logits
+              <span style="color:var(--violet)">│ top guess</span> <span style="color:var(--green)">│ target</span></div>
+          </div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage" data-stage="softmax">
+          <div><div class="title">5 · Softmax + loss</div><div class="desc">Scores become probabilities. Cross-entropy loss is −log p(target).</div><span class="tag">p: [1, <span class="vtxt"></span>]</span></div>
+          <div>
+            <div class="bars" id="predBars"></div>
+            <div class="lossline" id="lossLine"></div>
+          </div>
+        </div>
+
+        <div class="card trainbox">
+          <h3>Train on this one window</h3>
+          <p class="small muted" style="margin:0 0 12px">One gradient-descent step on this single example. The loss flows backwards: <b>every</b> row of W gets nudged
+            (towards h for the target, away from h for the words that stole probability), but only the <b>4 rows of E</b> that were looked up change.
+            The real training does the same thing with batches of <span id="bsTxt"></span> and the Adam optimizer.</p>
+          <div class="row">
+            <button class="primary" id="step1">Take 1 step</button>
+            <button id="step10">10 steps</button>
+            <button id="resetW">Reset weights</button>
+            <span class="muted small" style="margin-left:8px">learning rate</span>
+            <input type="range" id="lr" min="-2" max="0" step="0.1" value="-1" style="width:110px" />
+            <span class="mono small" id="lrTxt"></span>
+          </div>
+          <div class="row" style="margin-top:16px;gap:28px;align-items:flex-end">
+            <div><div class="muted small">p(target)</div><div class="bignum" id="pT">—</div></div>
+            <div><div class="muted small">loss</div><div class="bignum" id="lT">—</div></div>
+            <div><div class="muted small">steps taken</div><div class="bignum" id="nSteps">0</div></div>
+            <svg id="pSpark" width="220" height="56" style="margin-left:auto"></svg>
+          </div>
+          <div class="small muted" id="trainMsg" style="margin-top:8px"></div>
+        </div>
+      </div>
+      <div class="codewrap"><pre class="code" id="codeNet"></pre>
+        <p class="small muted" style="margin-top:12px">Shapes on the left use batch size 1. During training <code class="inline">B</code> = <span class="bsTxt2"></span>, so the
+          embedding lookup is <span class="mono">[B, 4, 100]</span> and logits are <span class="mono">[B, <span class="vtxt"></span>]</span>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= 5. TRAINING -->
+  <section id="training" class="reveal">
+    <div class="sh"><span class="num">05</span><h2>Training: a million guesses, ten times over</h2></div>
+    <p class="lede">The loop shuffles all windows into batches, runs the forward pass, measures the cross-entropy loss, backpropagates,
+      and lets Adam update the weights. Below is the real loss curve from our run.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Loss per epoch (real run)</h3>
+        <svg id="lossChart" class="chart" viewBox="0 0 640 330"></svg>
+        <div class="kv" id="lossKv"></div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <h3>One training step</h3>
+          <div class="phases" id="phases"></div>
+          <div class="phasedesc" id="phaseDesc"></div>
+          <div class="progress"><div id="progBar"></div></div>
+          <div class="row small muted"><span id="progTxt"></span><button id="phasePlay" style="margin-left:auto">❚❚ Pause</button></div>
+        </div>
+        <pre class="code" id="codeTrain"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= 6. SPACE -->
+  <section id="space" class="reveal">
+    <div class="sh"><span class="num">06</span><h2>The embedding space</h2></div>
+    <p class="lede">After training, the rows of <code class="inline">E</code> are the word vectors. Here are the <b id="nMapTxt"></b> most frequent words,
+      squashed from 100 dimensions to 2 with t-SNE and coloured by k-means cluster. Neighbours in the sidebar use <b>cosine similarity in the full
+      100-dimensional space</b>, the same as <code class="inline">most_similar()</code>. Scroll to zoom, drag to pan, click a word.</p>
+    <div class="space">
+      <div class="mapwrap">
+        <canvas id="map"></canvas>
+        <div class="maptools">
+          <input type="text" id="mapSearch" placeholder="search a word…  ⏎" list="mapWords" />
+          <datalist id="mapWords"></datalist>
+          <button id="mapReset">Reset view</button>
+          <button id="mapLabels">Labels: some</button>
+        </div>
+        <div class="tooltip" id="tip"></div>
+        <div class="maphint">scroll = zoom · drag = pan · click = nearest neighbours</div>
+      </div>
+      <div class="side">
+        <div class="card">
+          <div class="muted small">selected</div>
+          <div class="selword" id="selWord">—</div>
+          <div class="muted small mono" id="selMeta"></div>
+          <div class="hrows" style="margin-top:10px"><div class="hrow h" style="grid-template-columns:1fr"><canvas id="selVec"></canvas></div></div>
+          <h3 style="margin-top:16px">nearest neighbours</h3>
+          <div id="nbList"></div>
+        </div>
+        <div class="card">
+          <h3>Clusters <span class="muted small" style="text-transform:none">(click to isolate)</span></h3>
+          <div class="clusters" id="clusters"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= 7. ARITHMETIC -->
+  <section id="arith" class="reveal">
+    <div class="sh"><span class="num">07</span><h2>Playing with vectors</h2></div>
+    <p class="lede">Because meaning lives in directions, you can do arithmetic on words. Our model only saw <span class="mrTxt"></span> movie reviews (the original word2vec used billions of words),
+      so expect some hits and plenty of noise. That's part of the fun.</p>
+    <div class="grid2 even">
+      <div class="card">
+        <h3>Analogy: a − b + c ≈ ?</h3>
+        <div class="arith">
+          <input type="text" id="aA" /> <span>−</span> <input type="text" id="aB" /> <span>+</span> <input type="text" id="aC" /> <span>≈</span>
+        </div>
+        <div class="row small" id="aPresets" style="margin:14px 0"></div>
+        <div class="bars" id="aOut"></div>
+      </div>
+      <div class="card">
+        <h3>Cosine similarity</h3>
+        <div class="row"><input type="text" id="s1" value="good" style="width:150px" /><span class="muted">vs</span><input type="text" id="s2" value="great" style="width:150px" /></div>
+        <div class="gauge"><div class="needle" id="needle"></div></div>
+        <div class="row small muted" style="justify-content:space-between"><span>−1 opposite</span><span>0 unrelated</span><span>+1 same direction</span></div>
+        <div class="bignum" id="simVal" style="margin-top:12px;text-align:center">—</div>
+        <div class="row small" id="sPresets" style="margin-top:14px;justify-content:center"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= 8. CODE MAP -->
+  <section id="code" class="reveal">
+    <div class="sh"><span class="num">08</span><h2>Code map</h2></div>
+    <p class="lede">Where each piece of <code class="inline">word2vec.py</code> shows up on this page.</p>
+    <div class="cmap">
+      <a href="#tokens"><code>load_corpus()</code><p>Downloads IMDB and keeps the first <span class="mrTxt"></span> training reviews.</p></a>
+      <a href="#tokens"><code>tokenize()</code> · <code>Vocab</code><p>Whitespace split + isalpha() filter, min-count vocab, word ↔ id maps ordered by frequency.</p></a>
+      <a href="#windows"><code>build_cbow_windows()</code><p>numpy sliding windows split into contexts [N, 4] and targets [N].</p></a>
+      <a href="#network"><code>CBOW</code><p>nn.Embedding → mean → nn.Linear. The entire neural network.</p></a>
+      <a href="#training"><code>train()</code><p>Adam + CrossEntropyLoss over shuffled batches, records per-epoch loss.</p></a>
+      <a href="#space"><code>get_embeddings()</code> · <code>most_similar()</code><p>Read out E and rank words by cosine similarity.</p></a>
+      <a href="#space"><code>save_embeddings()</code> · <code>save_model()</code><p>Artifacts consumed by <code>export_viz.py</code> to build this page's data.</p></a>
+    </div>
+    <footer>Regenerate after retraining: <code class="inline">python word2vec/word2vec.py &amp;&amp; python word2vec/vis/export_viz.py</code> then refresh this page.</footer>
+  </section>
+</main>
+
+<script src="w2v_viz_data.js"></script>
+<script>
+"use strict";
+if (!window.W2V) {
+  document.getElementById("app").innerHTML =
+    '<div class="missing card"><h2>No model data found</h2><p class="muted">Run <code class="inline">python word2vec/word2vec.py</code> then ' +
+    '<code class="inline">python word2vec/vis/export_viz.py</code> to create <code class="inline">w2v_viz_data.js</code> next to this file.</p></div>';
+  throw new Error("w2v_viz_data.js missing");
+}
+
+/* =====================================================================
+   model data
+   ===================================================================== */
+const M = W2V.meta;
+const D = M.embed_dim, V = M.vocab_size, C = M.context_size;
+const WORDS = W2V.words, COUNTS = W2V.counts;
+const WID = new Map(WORDS.map((w, i) => [w, i]));
+
+function decodeQ(q, rows, cols) {
+  const bin = atob(q.b64), out = new Float32Array(rows * cols);
+  for (let i = 0; i < bin.length; i++) {
+    let v = bin.charCodeAt(i);
+    if (v > 127) v -= 256;
+    out[i] = v * q.scale[(i / cols) | 0];
+  }
+  return out;
+}
+const E0 = decodeQ(W2V.E, V, D), W0 = decodeQ(W2V.W, V, D), B0 = Float32Array.from(W2V.b);
+let E = E0.slice(), Wt = W0.slice(), Bt = B0.slice();   // live copies the training demo mutates
+
+const EN = new Float32Array(V * D);                     // unit-normalised original embeddings
+for (let v = 0; v < V; v++) {
+  let s = 0; for (let d = 0; d < D; d++) s += E0[v * D + d] ** 2;
+  s = Math.sqrt(s) || 1; for (let d = 0; d < D; d++) EN[v * D + d] = E0[v * D + d] / s;
+}
+const HM = (() => {                                     // heatmap colour scale: 98th pct of |E|
+  const a = []; for (let i = 0; i < E0.length; i += 37) a.push(Math.abs(E0[i]));
+  a.sort((x, y) => x - y); return a[Math.floor(a.length * 0.98)];
+})();
+
+/* =====================================================================
+   helpers
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => n.toLocaleString("en-US");
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pct = (p) => (p >= 0.1 ? (p * 100).toFixed(1) : p >= 0.001 ? (p * 100).toFixed(2) : (p * 100).toExponential(1)) + "%";
+// must mirror tokenize() in word2vec.py: whitespace split, keep only purely alphabetic pieces
+const splitPieces = (text) => text.toLowerCase().split("<br />").join(" ").split(/\s+/).filter(Boolean);
+const isAlpha = (w) => /^\p{L}+$/u.test(w);
+const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+
+function divColor(v, max) {
+  let t = Math.max(-1, Math.min(1, v / max));
+  if (t >= 0) return `rgb(${lerp(244, 225, t)},${lerp(245, 29, t)},${lerp(250, 72, t)})`;
+  t = -t; return `rgb(${lerp(244, 37, t)},${lerp(245, 99, t)},${lerp(250, 235, t)})`;
+}
+function fitCanvas(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(r.width * dpr)); cv.height = Math.max(1, Math.round(r.height * dpr));
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+function drawHeat(cv, vec, off = 0) {
+  const { ctx, w, h } = fitCanvas(cv), cw = w / D;
+  for (let d = 0; d < D; d++) { ctx.fillStyle = divColor(vec[off + d], HM); ctx.fillRect(d * cw, 0, Math.ceil(cw), h); }
+}
+function topK(arr, k, exclude) {
+  const idx = [];
+  for (let i = 0; i < arr.length; i++) {
+    if (exclude && exclude.has(i)) continue;
+    if (idx.length < k) { idx.push(i); idx.sort((a, b) => arr[b] - arr[a]); }
+    else if (arr[i] > arr[idx[k - 1]]) { idx[k - 1] = i; idx.sort((a, b) => arr[b] - arr[a]); }
+  }
+  return idx;
+}
+
+/* ---------- python highlighter for code panels ---------- */
+function hlPy(line) {
+  const re = /(#.*$)|("""[^"]*"""|"(?:[^"\\]|\\.)*")|\b(def|class|return|for|in|if|import|from|continue|not|and|or|None|True|False|self|super)\b|\b(\d+(?:\.\d+)?(?:e-?\d+)?)\b|([A-Za-z_]\w*(?=\())/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(line))) {
+    const cls = m[1] ? "com" : m[2] ? "str" : m[3] ? "kw" : m[4] ? "num" : "fn";
+    out += esc(line.slice(last, m.index)) + `<span class="${cls}">${esc(m[0])}</span>`;
+    last = re.lastIndex;
+  }
+  return out + esc(line.slice(last));
+}
+function renderCode(el, file, src) {
+  el.innerHTML = `<div class="file">${esc(file)}</div>` +
+    src.split("\n").map((l, i) => `<span class="ln" data-i="${i}">${hlPy(l) || " "}</span>`).join("");
+}
+// highlight by content rather than line number so edits to word2vec.py don't break it
+function hlLines(el, patterns) {
+  el.querySelectorAll(".ln").forEach((n) => n.classList.toggle("hl", patterns.some((p) => n.textContent.includes(p))));
+}
+const SRC = W2V.code;
+
+/* =====================================================================
+   the network (pure JS mirror of CBOW.forward)
+   ===================================================================== */
+function forward(ids, Em = E, Wm = Wt, Bm = Bt) {
+  const h = new Float32Array(D);
+  for (const id of ids) for (let d = 0; d < D; d++) h[d] += Em[id * D + d];
+  for (let d = 0; d < D; d++) h[d] /= ids.length;
+  const logits = new Float32Array(V); let mx = -Infinity;
+  for (let v = 0; v < V; v++) {
+    let s = Bm[v]; const o = v * D;
+    for (let d = 0; d < D; d++) s += Wm[o + d] * h[d];
+    logits[v] = s; if (s > mx) mx = s;
+  }
+  const p = new Float32Array(V); let Z = 0;
+  for (let v = 0; v < V; v++) { p[v] = Math.exp(logits[v] - mx); Z += p[v]; }
+  for (let v = 0; v < V; v++) p[v] /= Z;
+  return { h, logits, p };
+}
+// one plain-SGD step on a single window; gradients of cross-entropy w.r.t. logits are (p - onehot)
+function sgdStep(ids, t, lr) {
+  const { h, p } = forward(ids);
+  const g = p; g[t] -= 1;
+  const gh = new Float32Array(D);
+  for (let v = 0; v < V; v++) {
+    const gv = g[v], o = v * D;
+    for (let d = 0; d < D; d++) { gh[d] += gv * Wt[o + d]; Wt[o + d] -= lr * gv * h[d]; }
+    Bt[v] -= lr * gv;
+  }
+  for (const id of ids) for (let d = 0; d < D; d++) E[id * D + d] -= lr * gh[d] / ids.length;
+}
+
+/* =====================================================================
+   hero
+   ===================================================================== */
+(function hero() {
+  const last = W2V.history[W2V.history.length - 1];
+  const items = [
+    [fmt(M.max_reviews), "reviews"], [fmt(V), "vocab words"], [M.embed_dim, "dims per word"],
+    [fmt(M.n_windows), "training windows"], [M.epochs, "epochs"], [last.toFixed(2), "final loss"],
+  ];
+  $("stats").innerHTML = items.map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+  document.querySelectorAll(".pipe-node").forEach((n) => n.addEventListener("click", () => $(n.dataset.go).scrollIntoView()));
+  document.querySelectorAll(".vtxt").forEach((n) => (n.textContent = fmt(V)));
+  $("vCap").textContent = fmt(V);
+  $("minCount").textContent = M.min_count;
+  $("winSizeTxt").textContent = M.window_size;
+  $("ctxTxt").textContent = `${C} words on each side`;
+  $("nWindowsTxt").textContent = fmt(M.n_windows);
+  $("bsTxt").textContent = fmt(M.batch_size);
+  document.querySelectorAll(".bsTxt2").forEach((n) => (n.textContent = fmt(M.batch_size)));
+  document.querySelectorAll(".mrTxt").forEach((n) => (n.textContent = fmt(M.max_reviews)));
+  $("nMapTxt").textContent = fmt(W2V.map.n);
+})();
+
+/* =====================================================================
+   01 · guess game
+   ===================================================================== */
+(function game() {
+  const P = W2V.presets; let i = 0;
+  function show() {
+    const pr = P[i], L = pr.context.slice(0, C), R = pr.context.slice(C);
+    $("gSentence").innerHTML = L.map((w) => `<span class="cw">${esc(w)}</span>`).join("") +
+      `<span class="blank" id="gBlank">?</span>` + R.map((w) => `<span class="cw">${esc(w)}</span>`).join("");
+    $("gInput").value = ""; $("gResult").innerHTML = "";
+  }
+  function reveal() {
+    const pr = P[i], ids = pr.context.map((w) => WID.get(w)), t = WID.get(pr.target);
+    const { p } = forward(ids, E0, W0, B0), top = topK(p, 5);
+    const guess = $("gInput").value.trim().toLowerCase();
+    $("gBlank").textContent = pr.target; $("gBlank").classList.add("shown");
+    let msg = "";
+    if (guess) {
+      const gid = WID.get(guess);
+      msg = guess === pr.target ? `<p style="color:var(--green)">✓ Nailed it.</p>`
+        : gid === undefined ? `<p class="muted">“${esc(guess)}” isn't in the vocabulary.</p>`
+        : `<p class="muted">The model gives your guess “${esc(guess)}” <b style="color:var(--text)">${pct(p[gid])}</b>.</p>`;
+    }
+    $("gResult").innerHTML = msg + `<div class="muted small" style="margin-bottom:6px">model's top 5</div>` + barsHTML(top, p, t);
+  }
+  $("gReveal").onclick = reveal;
+  $("gInput").addEventListener("keydown", (e) => e.key === "Enter" && reveal());
+  $("gNext").onclick = () => { i = (i + 1) % P.length; show(); };
+  show();
+})();
+
+function barsHTML(idxs, p, target) {
+  const mx = p[idxs[0]];
+  return `<div class="bars">` + idxs.map((j) =>
+    `<div class="bar ${j === target ? "tgt" : ""}"><div class="w">${esc(WORDS[j])}</div>` +
+    `<div class="track"><div class="fill" style="width:${(p[j] / mx) * 100}%"></div></div><div class="p">${pct(p[j])}</div></div>`).join("") + `</div>`;
+}
+
+/* =====================================================================
+   02 · tokens + 03 · windows
+   ===================================================================== */
+renderCode($("codeTok"), "word2vec.py · tokenize / Vocab", SRC.tokenize + "\n\n\n" + SRC.Vocab);
+renderCode($("codeWin"), "word2vec.py · build_cbow_windows", SRC.build_cbow_windows);
+hlLines($("codeWin"), ["sliding_window_view", "targets.append", "contexts.append"]);
+hlLines($("codeTok"), ["isalpha", "most_common", "if t in self.word2idx"]);
+
+let kept = [];          // in-vocab tokens of the textarea: [{w, id}]
+let winIdx = 0, winTimer = null;
+const MAX_CHIPS = 400;
+
+function updateTokens() {
+  const pieces = splitPieces($("rawText").value);
+  let nTok = 0, nOov = 0;
+  kept = [];
+  const html = pieces.slice(0, MAX_CHIPS).map((w) => {
+    if (!isAlpha(w)) return `<span class="tok rej" title="not purely alphabetic: tokenize() drops it">${esc(w)}<span class="id">✕</span></span>`;
+    const id = WID.get(w);
+    if (id === undefined) return `<span class="tok oov" title="rarer than min_count: not in vocab">${esc(w)}<span class="id">–</span></span>`;
+    return `<span class="tok" title="id ${id} · seen ${fmt(COUNTS[id])}×">${esc(w)}<span class="id">${id}</span></span>`;
+  }).join("");
+  for (const w of pieces) {
+    if (!isAlpha(w)) continue;
+    nTok++;
+    const id = WID.get(w);
+    if (id === undefined) nOov++; else kept.push({ w, id });
+  }
+  $("tokChips").innerHTML = html + (pieces.length > MAX_CHIPS ? `<span class="muted small">… +${pieces.length - MAX_CHIPS} more</span>` : "");
+  $("kPieces").textContent = fmt(pieces.length);
+  $("kRej").textContent = fmt(pieces.length - nTok);
+  $("kDropped").textContent = fmt(nOov);
+  $("kKept").textContent = fmt(kept.length);
+  winIdx = 0; renderWindowChips(); renderWindow();
+}
+const nWin = () => Math.max(0, kept.length - 2 * C);
+
+function renderWindowChips() {
+  $("winChips").innerHTML = kept.slice(0, MAX_CHIPS).map((k, j) =>
+    `<span class="tok click" data-j="${j}">${esc(k.w)}<span class="id">${k.id}</span></span>`).join("");
+}
+function renderWindow() {
+  const chips = $("winChips").children, n = nWin();
+  if (!n) { $("winPair").innerHTML = `<span class="muted">Need at least ${M.window_size} in-vocab tokens.</span>`; $("winMat").innerHTML = ""; $("winCount").textContent = ""; return; }
+  winIdx = Math.max(0, Math.min(n - 1, winIdx));
+  for (let j = 0; j < chips.length; j++) {
+    const off = j - winIdx;
+    chips[j].classList.toggle("tgt", off === C);
+    chips[j].classList.toggle("ctx", off >= 0 && off <= 2 * C && off !== C);
+  }
+  const win = kept.slice(winIdx, winIdx + 2 * C + 1), tgt = win[C], ctx = win.filter((_, j) => j !== C);
+  $("winPair").innerHTML =
+    `contexts[${winIdx}] = [<span class="c">${ctx.map((k) => k.id).join(", ")}</span>] <span class="w"># ${ctx.map((k) => esc(k.w)).join(" ")}</span><br/>` +
+    `targets[${winIdx}]  = <span class="t">${tgt.id}</span> <span class="w"># ${esc(tgt.w)}</span>`;
+  $("winCount").textContent = `window ${winIdx + 1} / ${n}`;
+
+  const head = ["", ...Array.from({ length: 2 * C + 1 }, (_, j) => (j === C ? "target" : `w${j - C > 0 ? "+" : "−"}${Math.abs(j - C)}`))];
+  let rows = `<tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr>`;
+  for (let r = Math.max(0, winIdx - 3); r <= Math.min(n - 1, winIdx + 3); r++) {
+    rows += `<tr class="${r === winIdx ? "cur" : ""}"><td class="rowi">${r}</td>` +
+      kept.slice(r, r + 2 * C + 1).map((k, j) => `<td class="${j === C ? "tcol" : ""}" title="${esc(k.w)}">${k.id}</td>`).join("") + `</tr>`;
+  }
+  $("winMat").innerHTML = rows;
+}
+$("rawText").value = W2V.sample;
+$("rawText").addEventListener("input", updateTokens);
+$("winChips").addEventListener("click", (e) => {
+  const t = e.target.closest(".tok"); if (!t) return;
+  winIdx = +t.dataset.j - C; renderWindow();
+});
+$("winPrev").onclick = () => { winIdx--; renderWindow(); };
+$("winNext").onclick = () => { winIdx++; renderWindow(); };
+function winDelay() { return 1400 / +$("winSpeed").value; }
+function winTick() { winIdx = (winIdx + 1) % Math.max(1, nWin()); renderWindow(); winTimer = setTimeout(winTick, winDelay()); }
+$("winPlay").onclick = () => {
+  if (winTimer) { clearTimeout(winTimer); winTimer = null; $("winPlay").textContent = "▶ Play"; }
+  else { $("winPlay").textContent = "❚❚ Pause"; winTick(); }
+};
+$("winSend").onclick = () => {
+  if (!nWin()) return;
+  const win = kept.slice(winIdx, winIdx + 2 * C + 1);
+  setSlots(win.filter((_, j) => j !== C).map((k) => k.w), win[C].w);
+  $("network").scrollIntoView();
+};
+updateTokens();
+
+/* =====================================================================
+   04 · network
+   ===================================================================== */
+const lossLines = SRC.train.split("\n").map((l) => l.trim()).filter((l) => /^(loss_fn = |logits = model\(|loss = loss_fn\()/.test(l));
+renderCode($("codeNet"), "word2vec.py · CBOW", SRC.CBOW + "\n\n# ... inside train()\n" + lossLines.join("\n"));
+const STAGE_LINES = {
+  ids: ["def forward", "# context_ids", "logits = model("],
+  embed: ["self.embeddings =", "hidden = "],
+  mean: ["hidden = "],
+  linear: ["self.output =", "return self.output", "logits = model("],
+  softmax: ["loss_fn = ", "loss = loss_fn("],
+};
+document.querySelectorAll(".stage").forEach((s) => {
+  s.addEventListener("mouseenter", () => hlLines($("codeNet"), STAGE_LINES[s.dataset.stage]));
+  s.addEventListener("mouseleave", () => hlLines($("codeNet"), []));
+});
+
+const SLOT_LABELS = [...Array.from({ length: C }, (_, j) => `w−${C - j}`), "target", ...Array.from({ length: C }, (_, j) => `w+${j + 1}`)];
+$("slots").innerHTML = SLOT_LABELS.map((l, j) =>
+  `<div class="slot ${j === C ? "t" : "c"}"><label>${l}</label><input type="text" data-j="${j}" spellcheck="false" autocomplete="off"/><div class="sid"></div></div>`).join("");
+const slotInputs = [...$("slots").querySelectorAll("input")];
+slotInputs.forEach((inp) => inp.addEventListener("input", runNet));
+
+function setSlots(ctxWords, target) {
+  const all = [...ctxWords.slice(0, C), target || "", ...ctxWords.slice(C)];
+  slotInputs.forEach((inp, j) => (inp.value = all[j]));
+  pHist = []; runNet();
+}
+function readSlots() {
+  let ok = true; const ctx = []; let t = null;
+  slotInputs.forEach((inp, j) => {
+    const w = inp.value.trim().toLowerCase(), id = WID.get(w), sid = inp.parentElement.querySelector(".sid");
+    const valid = id !== undefined;
+    inp.classList.toggle("bad", w !== "" && !valid || (j !== C && !valid));
+    sid.textContent = valid ? `id ${id}` : w ? "not in vocab" : "";
+    if (j === C) t = valid ? id : null; else if (valid) ctx.push(id); else ok = false;
+  });
+  return { ok, ctx, t };
+}
+
+// E overview thumbnail: rows on a log-frequency axis so common words are spread out
+const TH = 240, logV = Math.log(V + 1);
+const yToId = (y) => Math.min(V - 1, Math.round(Math.exp((y / TH) * logV) - 1));
+const idToY = (id) => (Math.log(id + 1) / logV) * TH;
+(function drawThumb() {
+  const cv = $("eThumb"), ctx = cv.getContext("2d"), img = ctx.createImageData(D, TH);
+  for (let y = 0; y < TH; y++) {
+    const id = yToId(y);
+    for (let d = 0; d < D; d++) {
+      const m = divColor(E0[id * D + d], HM).match(/\d+/g), o = (y * D + d) * 4;
+      img.data[o] = +m[0]; img.data[o + 1] = +m[1]; img.data[o + 2] = +m[2]; img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+})();
+const thumbWrap = document.querySelector(".ethumb");
+const markers = Array.from({ length: 2 * C }, () => { const d = document.createElement("div"); d.className = "mk"; thumbWrap.appendChild(d); return d; });
+
+let lastNet = null, pHist = [];
+function runNet() {
+  const { ok, ctx, t } = readSlots();
+  const disabled = !ok || t === null;
+  ["step1", "step10"].forEach((id) => ($(id).disabled = disabled));
+  $("trainMsg").textContent = !ok ? "Fill all 4 context slots with vocabulary words." : t === null ? "Type the true middle word in the dashed target slot to compute the loss and train." : "";
+  if (!ok) { lastNet = null; return; }
+
+  const { h, logits, p } = forward(ctx);
+  lastNet = { ctx, t, p };
+
+  ctx.forEach((id, j) => (markers[j].style.top = `${(idToY(id) / TH) * 170 - 1}px`));
+  $("ctxRows").innerHTML = ctx.map((id) => `<div class="hrow"><div class="w" title="${esc(WORDS[id])}">${esc(WORDS[id])}</div><canvas></canvas></div>`).join("");
+  [...$("ctxRows").querySelectorAll("canvas")].forEach((cv, j) => drawHeat(cv, E, ctx[j] * D));
+  drawHeat($("hRow"), h);
+  $("hNorm").textContent = Math.hypot(...h).toFixed(2);
+
+  const top = topK(p, 10);
+  drawLogitHist(logits, top[0], t);
+  let rows = top.slice();
+  if (t !== null && !top.includes(t)) rows = [...top.slice(0, 9), t];
+  $("predBars").innerHTML = barsHTML(rows, p, t);
+  if (t !== null) {
+    let rank = 1; for (let v = 0; v < V; v++) if (p[v] > p[t]) rank++;
+    const loss = -Math.log(p[t]);
+    $("lossLine").innerHTML = `<span>target <b style="color:var(--green)">${esc(WORDS[t])}</b></span><span>rank <b>${fmt(rank)}</b> / ${fmt(V)}</span>` +
+      `<span>p = <b>${pct(p[t])}</b></span><span>loss = −log p = <b>${loss.toFixed(3)}</b></span>`;
+    $("pT").textContent = pct(p[t]); $("lT").textContent = loss.toFixed(3);
+  } else {
+    $("lossLine").innerHTML = `<span class="muted">no target given: showing predictions only</span>`;
+    $("pT").textContent = "—"; $("lT").textContent = "—";
+  }
+  drawSpark();
+}
+
+function drawLogitHist(logits, topId, t) {
+  const { ctx, w, h } = fitCanvas($("logitHist"));
+  let lo = Infinity, hi = -Infinity;
+  for (const x of logits) { if (x < lo) lo = x; if (x > hi) hi = x; }
+  const NB = 70, bins = new Array(NB).fill(0), bw = (hi - lo) / NB || 1;
+  for (const x of logits) bins[Math.min(NB - 1, Math.floor((x - lo) / bw))]++;
+  const mx = Math.log1p(Math.max(...bins)), pad = 14, cw = (w - 2) / NB;
+  bins.forEach((c, i) => {
+    const bh = (Math.log1p(c) / mx) * (h - pad - 4);
+    const g = ctx.createLinearGradient(0, h - pad, 0, h - pad - bh);
+    g.addColorStop(0, "rgba(124,58,237,.25)"); g.addColorStop(1, "rgba(8,145,178,.85)");
+    ctx.fillStyle = g; ctx.fillRect(1 + i * cw, h - pad - bh, cw - 1, bh);
+  });
+  const xOf = (x) => 1 + ((x - lo) / (hi - lo)) * (w - 2);
+  const mark = (x, col) => { ctx.fillStyle = col; ctx.fillRect(Math.min(w - 2, xOf(x)) - 1, 0, 2, h - pad); };
+  if (t !== null) mark(logits[t], "#059669");
+  mark(logits[topId], "#7c3aed");
+  ctx.fillStyle = "#8a90a8"; ctx.font = "10px ui-monospace, monospace";
+  ctx.fillText(lo.toFixed(1), 2, h - 2); ctx.textAlign = "right"; ctx.fillText(hi.toFixed(1), w - 2, h - 2);
+  ctx.textAlign = "center"; ctx.fillText("logit value → (bar height: log count)", w / 2, h - 2);
+}
+
+function drawSpark() {
+  const svg = $("pSpark"), w = 220, h = 56;
+  if (pHist.length < 2) { svg.innerHTML = `<text x="${w}" y="${h - 6}" text-anchor="end" fill="#8a90a8" font-size="11">p(target) over steps</text>`; return; }
+  const mx = Math.max(...pHist, 1e-9), pts = pHist.map((v, i) => `${(i / (pHist.length - 1)) * (w - 4) + 2},${h - 4 - (v / mx) * (h - 10)}`);
+  svg.innerHTML = `<polyline points="${pts.join(" ")}" fill="none" stroke="url(#sg)" stroke-width="2.5" stroke-linejoin="round"/>` +
+    `<defs><linearGradient id="sg"><stop offset="0" stop-color="#e11d48"/><stop offset="1" stop-color="#059669"/></linearGradient></defs>` +
+    `<text x="${w}" y="11" text-anchor="end" fill="#8a90a8" font-size="11">max ${pct(mx)}</text>`;
+}
+
+const lr = () => Math.pow(10, +$("lr").value);
+$("lr").addEventListener("input", () => ($("lrTxt").textContent = lr().toFixed(lr() < 0.1 ? 3 : 2)));
+$("lrTxt").textContent = lr().toFixed(2);
+let nSteps = 0;
+function backpropAnim() {
+  const order = ["softmax", "linear", "mean", "embed"], stages = Object.fromEntries([...document.querySelectorAll(".stage")].map((s) => [s.dataset.stage, s]));
+  document.querySelectorAll(".connector").forEach((c) => c.classList.add("back"));
+  order.forEach((s, i) => setTimeout(() => { stages[s].classList.add("bp"); setTimeout(() => stages[s].classList.remove("bp"), 380); }, i * 140));
+  setTimeout(() => { markers.forEach((m) => m.classList.add("flash")); }, 3 * 140);
+  setTimeout(() => { markers.forEach((m) => m.classList.remove("flash")); document.querySelectorAll(".connector").forEach((c) => c.classList.remove("back")); }, 900);
+}
+function doSteps(k) {
+  if (!lastNet || lastNet.t === null) return;
+  if (!pHist.length) pHist.push(lastNet.p[lastNet.t]);
+  const before = lastNet.p[lastNet.t];
+  for (let i = 0; i < k; i++) { sgdStep(lastNet.ctx, lastNet.t, lr()); nSteps++; pHist.push(forward(lastNet.ctx).p[lastNet.t]); }
+  $("nSteps").textContent = nSteps;
+  backpropAnim(); runNet();
+  const after = lastNet.p[lastNet.t], up = after >= before;
+  $("trainMsg").innerHTML = `p(${esc(WORDS[lastNet.t])}) went <span class="${up ? "delta-up" : "delta-down"}">${pct(before)} → ${pct(after)}</span>. ` +
+    `Updated 4 of ${fmt(V)} rows of E, and all ${fmt(V)} rows of W.` + (after > 0.95 ? " The model has now memorised this window, which is why real training uses millions of different ones." : "");
+}
+$("step1").onclick = () => doSteps(1);
+$("step10").onclick = () => doSteps(10);
+$("resetW").onclick = () => { E = E0.slice(); Wt = W0.slice(); Bt = B0.slice(); nSteps = 0; pHist = []; $("nSteps").textContent = 0; runNet(); };
+
+{ const p0 = W2V.presets[0]; setSlots(p0.context, p0.target); }
+window.addEventListener("resize", () => { runNet(); });
+
+/* =====================================================================
+   05 · training
+   ===================================================================== */
+renderCode($("codeTrain"), "word2vec.py · train", SRC.train);
+
+(function lossChart() {
+  const H = W2V.history, svg = $("lossChart"), W = 640, Ht = 330, L = 52, R = 20, T = 20, Bm = 44;
+  const yMax = Math.ceil(M.random_loss + 0.6), x = (i) => L + (i / (H.length - 1)) * (W - L - R), y = (v) => T + (1 - v / yMax) * (Ht - T - Bm);
+  let s = `<defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#0891b2"/></linearGradient>
+    <linearGradient id="la" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(124,58,237,.18)"/><stop offset="1" stop-color="rgba(124,58,237,0)"/></linearGradient></defs>`;
+  for (let v = 0; v <= yMax; v += 2) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(26,29,46,.07)"/><text x="${L - 10}" y="${y(v) + 4}" fill="#8a90a8" font-size="11" text-anchor="end">${v}</text>`;
+  H.forEach((_, i) => (s += `<text x="${x(i)}" y="${Ht - Bm + 20}" fill="#8a90a8" font-size="11" text-anchor="middle">${i + 1}</text>`));
+  s += `<text x="${(L + W - R) / 2}" y="${Ht - 6}" fill="#8a90a8" font-size="11" text-anchor="middle">epoch</text>`;
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(M.random_loss)}" y2="${y(M.random_loss)}" stroke="#e11d48" stroke-dasharray="6 5" opacity=".7"/>
+    <text x="${W - R}" y="${y(M.random_loss) - 8}" fill="#e11d48" font-size="11.5" text-anchor="end">random guessing: ln(${fmt(V)}) = ${M.random_loss.toFixed(2)}</text>`;
+  const pts = H.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  s += `<polygon points="${x(0)},${y(0)} ${pts} ${x(H.length - 1)},${y(0)}" fill="url(#la)"/>`;
+  s += `<polyline points="${pts}" fill="none" stroke="url(#lg)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
+  H.forEach((v, i) => (s += `<circle class="lp" data-i="${i}" cx="${x(i)}" cy="${y(v)}" r="5" fill="#ffffff" stroke="url(#lg)" stroke-width="2.5" style="cursor:pointer"/>`));
+  s += `<g id="lossTip" opacity="0"><rect rx="8" width="150" height="46" fill="rgba(255,255,255,.97)" stroke="rgba(26,29,46,.14)"/><text id="lt1" x="10" y="19" fill="#1a1d2e" font-size="12" font-family="ui-monospace,monospace"></text><text id="lt2" x="10" y="36" fill="#5b6178" font-size="11.5" font-family="ui-monospace,monospace"></text></g>`;
+  svg.innerHTML = s;
+  svg.querySelectorAll(".lp").forEach((c) => {
+    c.addEventListener("mouseenter", () => {
+      const i = +c.dataset.i, tip = $("lossTip"), tx = Math.min(x(i) + 10, W - R - 150);
+      $("lt1").textContent = `epoch ${i + 1}: loss ${H[i].toFixed(3)}`;
+      $("lt2").textContent = `perplexity ≈ ${fmt(Math.round(Math.exp(H[i])))}`;
+      tip.setAttribute("transform", `translate(${tx},${y(H[i]) - 58})`); tip.setAttribute("opacity", 1);
+    });
+    c.addEventListener("mouseleave", () => $("lossTip").setAttribute("opacity", 0));
+  });
+  const last = H[H.length - 1];
+  $("lossKv").innerHTML =
+    `<div><b>${H[0].toFixed(2)}</b><span>loss after epoch 1</span></div>` +
+    `<div><b>${last.toFixed(2)}</b><span>loss after epoch ${H.length}</span></div>` +
+    `<div><b>~${fmt(Math.round(Math.exp(last)))}</b><span>perplexity: as unsure as picking from this many words (vs ${fmt(V)})</span></div>`;
+})();
+
+(function phases() {
+  const steps = Math.ceil(M.n_windows / M.batch_size), total = steps * M.epochs, bs = fmt(M.batch_size);
+  const P = [
+    { n: "batch", lines: ["in loader:", "contexts.to(DEVICE)"], d: `The DataLoader hands over a shuffled batch: <span class="mono" style="color:var(--amber)">contexts [${bs}, 4]</span> and <span class="mono" style="color:var(--green)">targets [${bs}]</span>.` },
+    { n: "forward", lines: ["logits = model("], d: `Look up and average embeddings, then score every word: <span class="mono" style="color:var(--cyan)">logits [${bs}, ${fmt(V)}]</span>. That's ~${(M.batch_size * V * D / 1e9).toFixed(1)} billion multiply-adds.` },
+    { n: "loss", lines: ["loss = loss_fn("], d: `Cross-entropy: softmax each row, take −log p(true target), average over the batch into a single number.` },
+    { n: "backward", lines: ["zero_grad()", "loss.backward()"], d: `Clear old gradients, then backprop. W gets a dense gradient; E only gets gradients for the ≤${fmt(M.batch_size * 2 * C)} rows this batch used.` },
+    { n: "adam step", lines: ["optimizer.step()"], d: `Adam updates the weights with lr = ${M.lr}, scaling each parameter's step by its running gradient statistics.` },
+    { n: "track", lines: ["total_loss +=", "n += ", "history.append"], d: `Accumulate the loss so the epoch average can be plotted, which is the curve on the left.` },
+  ];
+  $("phases").innerHTML = P.map((p, i) => `<span class="phase" data-i="${i}">${p.n}</span>`).join("");
+  let k = 0, step = 0, timer = null;
+  function show() {
+    document.querySelectorAll(".phase").forEach((el, i) => el.classList.toggle("on", i === k));
+    $("phaseDesc").innerHTML = P[k].d;
+    hlLines($("codeTrain"), P[k].lines);
+    const ep = Math.floor(step / steps);
+    $("progBar").style.width = `${(step / total) * 100}%`;
+    $("progTxt").textContent = `epoch ${ep + 1}/${M.epochs} · step ${fmt((step % steps) + 1)}/${fmt(steps)} · ${fmt(total)} steps total`;
+  }
+  function tick() { k = (k + 1) % P.length; if (k === 0) step = (step + 137) % total; show(); }
+  function play() { timer = setInterval(tick, 1700); $("phasePlay").textContent = "❚❚ Pause"; }
+  $("phasePlay").onclick = () => { if (timer) { clearInterval(timer); timer = null; $("phasePlay").textContent = "▶ Play"; } else play(); };
+  $("phases").addEventListener("click", (e) => { const el = e.target.closest(".phase"); if (el) { k = +el.dataset.i; show(); } });
+  show(); play();
+})();
+
+/* =====================================================================
+   06 · embedding space
+   ===================================================================== */
+const PAL = ["#7c3aed", "#0891b2", "#d97706", "#059669", "#e11d48", "#2563eb", "#db2777", "#65a30d", "#ea580c", "#0d9488", "#9333ea", "#ca8a04", "#0284c7", "#dc2626"];
+const NM = W2V.map.n, XY = W2V.map.xy, CL = W2V.map.cluster;
+
+function neighbours(id, k = 12) {
+  const sims = new Float32Array(V), o = id * D;
+  for (let v = 0; v < V; v++) { let s = 0; const q = v * D; for (let d = 0; d < D; d++) s += EN[q + d] * EN[o + d]; sims[v] = s; }
+  return topK(sims, k, new Set([id])).map((j) => [j, sims[j]]);
+}
+
+const mapState = { scale: 1, tx: 0, ty: 0, sel: null, nbs: [], hover: null, cluster: null, labels: 1 };
+const mapCv = $("map");
+let mapDims = null;
+function toScreen(i) {
+  const R = Math.min(mapDims.w, mapDims.h) / 2 * 0.9;
+  return [mapDims.w / 2 + XY[2 * i] * R * mapState.scale + mapState.tx, mapDims.h / 2 + XY[2 * i + 1] * R * mapState.scale + mapState.ty];
+}
+function drawMap() {
+  mapDims = fitCanvas(mapCv);
+  const { ctx, w, h } = mapDims, S = mapState;
+  ctx.clearRect(0, 0, w, h);
+  const nbSet = new Set(S.nbs.map(([j]) => j));
+  const focus = (i) => (S.sel === null && S.cluster === null) || i === S.sel || nbSet.has(i) || (S.cluster !== null && CL[i] === S.cluster);
+
+  if (S.sel !== null && S.sel < NM) {
+    const [sx, sy] = toScreen(S.sel);
+    for (const [j, s] of S.nbs) if (j < NM) {
+      const [x, y] = toScreen(j);
+      ctx.strokeStyle = `rgba(124,58,237,${0.2 + 0.6 * Math.max(0, s)})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x, y); ctx.stroke();
+    }
+  }
+  for (let i = NM - 1; i >= 0; i--) {
+    const [x, y] = toScreen(i);
+    if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
+    const r = (1.6 + 3.2 * Math.pow(1 - i / NM, 4)) * Math.min(2, Math.sqrt(S.scale));
+    ctx.globalAlpha = focus(i) ? 0.85 : 0.22;
+    ctx.fillStyle = PAL[CL[i] % PAL.length];
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const boxes = [], budget = S.labels === 0 ? 0 : S.labels === 2 ? NM : Math.round(70 * S.scale * S.scale);
+  const tryLabel = (i, strong) => {
+    const [x, y] = toScreen(i);
+    if (x < 0 || y < 0 || x > w || y > h) return;
+    ctx.font = strong ? "600 13px ui-monospace, monospace" : "11px ui-monospace, monospace";
+    const tw = ctx.measureText(WORDS[i]).width, bx = [x + 6, y - 7, tw, 14];
+    if (!strong && boxes.some((b) => bx[0] < b[0] + b[2] && bx[0] + bx[2] > b[0] && bx[1] < b[1] + b[3] && bx[1] + bx[3] > b[1])) return;
+    boxes.push(bx);
+    if (strong) { ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.fillRect(bx[0] - 3, bx[1] - 1, tw + 6, 16); }
+    ctx.fillStyle = strong ? "#1a1d2e" : focus(i) ? "rgba(26,29,46,.72)" : "rgba(26,29,46,.14)";
+    ctx.fillText(WORDS[i], x + 6, y + 4);
+  };
+  const strong = [S.sel, S.hover, ...S.nbs.map(([j]) => j)].filter((i) => i !== null && i < NM);
+  strong.forEach((i) => tryLabel(i, true));
+  for (let i = 0; i < Math.min(NM, budget); i++) if (!strong.includes(i)) tryLabel(i, false);
+  if (S.sel !== null && S.sel < NM) {
+    const [x, y] = toScreen(S.sel);
+    ctx.strokeStyle = "#1a1d2e"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.stroke();
+  }
+}
+function pick(mx, my) {
+  let best = null, bd = 12 * 12;
+  for (let i = 0; i < NM; i++) { const [x, y] = toScreen(i), d = (x - mx) ** 2 + (y - my) ** 2; if (d < bd) { bd = d; best = i; } }
+  return best;
+}
+function selectWord(id, center) {
+  mapState.sel = id; mapState.nbs = neighbours(id);
+  $("selWord").textContent = WORDS[id];
+  $("selMeta").textContent = `id ${id} · seen ${fmt(COUNTS[id])}×` + (id < NM ? ` · cluster ${CL[id] + 1}` : " · not on map (rarer word)");
+  drawHeat($("selVec"), E0, id * D);
+  const mx = mapState.nbs[0][1];
+  $("nbList").innerHTML = mapState.nbs.map(([j, s]) =>
+    `<div class="nb" data-id="${j}"><span>${esc(WORDS[j])}</span><div class="track"><div class="fill" style="width:${Math.max(0, s / mx) * 100}%"></div></div><span class="s">${s.toFixed(3)}</span></div>`).join("");
+  if (center && id < NM) {
+    const R = Math.min(mapDims.w, mapDims.h) / 2 * 0.9, target = Math.max(mapState.scale, 2.5);
+    mapState.scale = target; mapState.tx = -XY[2 * id] * R * target; mapState.ty = -XY[2 * id + 1] * R * target;
+  }
+  drawMap();
+}
+$("nbList").addEventListener("click", (e) => { const n = e.target.closest(".nb"); if (n) selectWord(+n.dataset.id, true); });
+
+(function mapEvents() {
+  let drag = null, moved = false;
+  mapCv.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const r = mapCv.getBoundingClientRect(), mx = e.clientX - r.left - mapDims.w / 2, my = e.clientY - r.top - mapDims.h / 2;
+    const f = Math.exp(-e.deltaY * 0.0015), ns = Math.max(0.6, Math.min(40, mapState.scale * f)), k = ns / mapState.scale;
+    mapState.tx = mx - (mx - mapState.tx) * k; mapState.ty = my - (my - mapState.ty) * k; mapState.scale = ns;
+    drawMap();
+  }, { passive: false });
+  mapCv.addEventListener("mousedown", (e) => { drag = [e.clientX, e.clientY, mapState.tx, mapState.ty]; moved = false; mapCv.classList.add("drag"); });
+  window.addEventListener("mouseup", (e) => {
+    if (!drag) return;
+    mapCv.classList.remove("drag");
+    if (!moved) {
+      const r = mapCv.getBoundingClientRect(), i = pick(e.clientX - r.left, e.clientY - r.top);
+      if (i !== null) selectWord(i, false); else { mapState.sel = null; mapState.nbs = []; drawMap(); }
+    }
+    drag = null;
+  });
+  mapCv.addEventListener("mousemove", (e) => {
+    const r = mapCv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    if (drag) {
+      if (Math.abs(e.clientX - drag[0]) + Math.abs(e.clientY - drag[1]) > 3) moved = true;
+      mapState.tx = drag[2] + e.clientX - drag[0]; mapState.ty = drag[3] + e.clientY - drag[1]; drawMap(); return;
+    }
+    const i = pick(mx, my), tip = $("tip");
+    if (i !== mapState.hover) { mapState.hover = i; drawMap(); }
+    if (i === null) { tip.style.opacity = 0; return; }
+    tip.innerHTML = `<b>${esc(WORDS[i])}</b> <span class="muted">· id ${i} · ${fmt(COUNTS[i])}× · cluster ${CL[i] + 1}</span>`;
+    tip.style.left = `${Math.min(mx + 14, mapDims.w - 260)}px`; tip.style.top = `${my + 14}px`; tip.style.opacity = 1;
+  });
+  mapCv.addEventListener("mouseleave", () => { $("tip").style.opacity = 0; mapState.hover = null; drawMap(); });
+  $("mapReset").onclick = () => { Object.assign(mapState, { scale: 1, tx: 0, ty: 0, cluster: null }); document.querySelectorAll(".cl").forEach((c) => c.classList.remove("on")); drawMap(); };
+  const LBL = ["Labels: off", "Labels: some", "Labels: all"];
+  $("mapLabels").onclick = () => { mapState.labels = (mapState.labels + 1) % 3; $("mapLabels").textContent = LBL[mapState.labels]; drawMap(); };
+  $("mapSearch").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const id = WID.get(e.target.value.trim().toLowerCase());
+    e.target.classList.toggle("bad", id === undefined);
+    if (id !== undefined) selectWord(id, true);
+  });
+  $("mapWords").innerHTML = WORDS.slice(0, 3000).map((w) => `<option value="${esc(w)}">`).join("");
+
+  const groups = Array.from({ length: Math.max(...CL) + 1 }, () => []);
+  for (let i = 0; i < NM; i++) groups[CL[i]].push(i);
+  $("clusters").innerHTML = groups.map((g, c) =>
+    `<span class="cl" data-c="${c}"><i style="background:${PAL[c % PAL.length]}"></i>${g.slice(0, 3).map((i) => esc(WORDS[i])).join(", ")}</span>`).join("");
+  $("clusters").addEventListener("click", (e) => {
+    const el = e.target.closest(".cl"); if (!el) return;
+    const c = +el.dataset.c; mapState.cluster = mapState.cluster === c ? null : c;
+    document.querySelectorAll(".cl").forEach((x) => x.classList.toggle("on", +x.dataset.c === mapState.cluster));
+    drawMap();
+  });
+  window.addEventListener("resize", drawMap);
+})();
+drawMap();
+selectWord(WID.get("bad") ?? 0, false);
+
+/* =====================================================================
+   07 · arithmetic + similarity
+   ===================================================================== */
+const ANALOGIES = [];   // filled in below once we know which ones the model gets
+function runAnalogy() {
+  const ins = ["aA", "aB", "aC"].map((id) => $(id)), ids = ins.map((i) => WID.get(i.value.trim().toLowerCase()));
+  ins.forEach((inp, j) => inp.classList.toggle("bad", ids[j] === undefined));
+  if (ids.some((i) => i === undefined)) { $("aOut").innerHTML = `<span class="muted small">All three words must be in the vocabulary.</span>`; return; }
+  const q = new Float32Array(D);
+  for (let d = 0; d < D; d++) q[d] = EN[ids[0] * D + d] - EN[ids[1] * D + d] + EN[ids[2] * D + d];
+  const qn = Math.hypot(...q), sims = new Float32Array(V);
+  for (let v = 0; v < V; v++) { let s = 0; for (let d = 0; d < D; d++) s += EN[v * D + d] * q[d]; sims[v] = s / qn; }
+  const top = topK(sims, 8, new Set(ids)), mx = sims[top[0]];
+  $("aOut").innerHTML = top.map((j) => `<div class="bar"><div class="w">${esc(WORDS[j])}</div><div class="track"><div class="fill" style="width:${Math.max(0, sims[j] / mx) * 100}%"></div></div><div class="p">${sims[j].toFixed(3)}</div></div>`).join("");
+}
+function runSim() {
+  const a = WID.get($("s1").value.trim().toLowerCase()), b = WID.get($("s2").value.trim().toLowerCase());
+  $("s1").classList.toggle("bad", a === undefined); $("s2").classList.toggle("bad", b === undefined);
+  if (a === undefined || b === undefined) { $("simVal").textContent = "—"; return; }
+  let s = 0; for (let d = 0; d < D; d++) s += EN[a * D + d] * EN[b * D + d];
+  $("simVal").textContent = s.toFixed(3);
+  $("needle").style.left = `calc(${((s + 1) / 2) * 100}% - 2px)`;
+}
+["aA", "aB", "aC"].forEach((id) => $(id).addEventListener("input", runAnalogy));
+["s1", "s2"].forEach((id) => $(id).addEventListener("input", runSim));
+const SIMS = [["good", "great"], ["good", "bad"], ["movie", "film"], ["actor", "actress"], ["funny", "hilarious"], ["boring", "dull"], ["movie", "banana"]]
+  .filter((pr) => pr.every((w) => WID.has(w)));
+$("sPresets").innerHTML = SIMS.map((p, i) => `<button data-i="${i}">${p[0]} · ${p[1]}</button>`).join("");
+$("sPresets").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; [$("s1").value, $("s2").value] = SIMS[+b.dataset.i]; runSim(); });
+function setAnalogies(list) {
+  const ok = list.filter((a) => a.every((w) => WID.has(w)));
+  $("aPresets").innerHTML = ok.map((a, i) => `<button data-i="${i}">${a[0]} − ${a[1]} + ${a[2]}</button>`).join("");
+  $("aPresets").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; [$("aA").value, $("aB").value, $("aC").value] = ok[+b.dataset.i]; runAnalogy(); };
+  if (ok.length) { [$("aA").value, $("aB").value, $("aC").value] = ok[0]; }
+  runAnalogy();
+}
+setAnalogies([["actor", "he", "she"], ["good", "best", "worst"], ["man", "he", "she"], ["movie", "movies", "actors"], ["great", "good", "bad"]]);
+runSim();
+
+/* =====================================================================
+   scroll reveal + nav highlight
+   ===================================================================== */
+const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && e.target.classList.add("visible")), { threshold: 0.08 });
+document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+const navLinks = [...document.querySelectorAll("nav .links a")];
+const so = new IntersectionObserver((es) => es.forEach((e) => {
+  if (e.isIntersecting) navLinks.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + e.target.id));
+}), { rootMargin: "-45% 0px -50% 0px" });
+document.querySelectorAll("section[id]").forEach((s) => so.observe(s));
+</script>
+</body>
+</html>
